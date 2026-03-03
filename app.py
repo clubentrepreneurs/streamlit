@@ -24,7 +24,7 @@ except Exception as e:
 # Initialisation des modèles (Version 004 pour l'embedding)
 try:
     llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GEMINI_KEY)
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004", google_api_key=GEMINI_KEY)
+    embeddings = GoogleGenerativeAIEmbeddings(model="text-embedding-004", google_api_key=GEMINI_KEY)
 except Exception as e:
     st.error(f"Erreur d'initialisation des modèles Google : {e}")
     st.stop()
