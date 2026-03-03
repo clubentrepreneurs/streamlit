@@ -1,23 +1,20 @@
 import streamlit as st
-import google.generativeai as genai
+from mistralai.client import MistralClient
+from mistralai.models.chat_completion import ChatMessage
 from pypdf import PdfReader
 
-# 1. CONFIGURATION INTERFACE
-st.set_page_config(page_title="Assistant Étudiant", layout="wide")
-st.title("🎓 Assistant de Cours")
+# 1. CONFIGURATION
+st.set_page_config(page_title="Assistant Mistral AI", layout="wide")
+st.title("🎓 Assistant de Cours (Propulsé par Mistral)")
 
-# 2. CONFIGURATION API
-# On récupère la clé et on configure Google immédiatement
-if "GEMINI_API_KEY" not in st.secrets:
-    st.error("❌ Erreur : La clé 'GEMINI_API_KEY' est absente des Secrets Streamlit.")
+if "MISTRAL_API_KEY" not in st.secrets:
+    st.error("❌ Ajoute MISTRAL_API_KEY dans tes Secrets Streamlit.")
     st.stop()
 
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+client = MistralClient(api_key=st.secrets["MISTRAL_API_KEY"])
+MODEL = "mistral-small-latest" # Modèle rapide et efficace
 
-# On force le modèle le plus commun
-model = genai.GenerativeModel('gemini-pro')
-
-# 3. GESTION DU DOCUMENT (BARRE LATÉRALE)
+# 2. LECTURE DU PDF
 with st.sidebar:
     st.header("📁 Documents")
     uploaded_file = st.file_uploader("Uploader un PDF", type="pdf")
@@ -28,40 +25,37 @@ with st.sidebar:
         for page in reader.pages:
             text += page.extract_text() + "\n"
         st.session_state['document_text'] = text
-        st.success("✅ Document chargé !")
+        st.success("✅ Cours chargé !")
 
-# 4. GESTION DU CHAT
+# 3. CHAT
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Afficher l'historique
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Zone de saisie
 if prompt := st.chat_input("Pose ta question..."):
-    # Ajouter le message utilisateur
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Réponse de l'IA
     with st.chat_message("assistant"):
         if 'document_text' not in st.session_state:
-            st.warning("Veuillez d'abord uploader un PDF.")
+            st.warning("Uploade un PDF d'abord.")
         else:
             try:
-                # Création du contexte
-                context = st.session_state['document_text'][:30000] # Limite à ~20 pages
-                full_prompt = f"Voici un cours : {context}\n\nQuestion : {prompt}"
+                # On prépare le contexte
+                context = st.session_state['document_text'][:20000]
+                full_content = f"Utilise ce cours pour répondre : {context}\n\nQuestion : {prompt}"
                 
-                # Appel direct à Google
-                response = model.generate_content(full_prompt)
+                messages = [ChatMessage(role="user", content=full_content)]
                 
-                # Affichage et sauvegarde
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
+                # Appel à Mistral
+                chat_response = client.chat(model=MODEL, messages=messages)
+                
+                response_text = chat_response.choices[0].message.content
+                st.markdown(response_text)
+                st.session_state.messages.append({"role": "assistant", "content": response_text})
             except Exception as e:
-                # Ici, on affiche l'erreur BRUTE pour comprendre le blocage
-                st.error(f"Erreur Google : {str(e)}")
+                st.error(f"Erreur Mistral : {str(e)}")
