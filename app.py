@@ -1,74 +1,84 @@
 import streamlit as st
 from mistralai import Mistral
 from pypdf import PdfReader
+import os
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="Assistant Mistral 2026", layout="wide")
-st.title("🎓 Assistant de Cours (Mistral AI)")
+st.set_page_config(page_title="Assistant Université 2026", layout="wide")
+st.title("🎓 Assistant Officiel des Étudiants")
 
-# Vérification de la clé API
 if "MISTRAL_API_KEY" not in st.secrets:
-    st.error("❌ Erreur : MISTRAL_API_KEY est introuvable dans les Secrets Streamlit.")
+    st.error("❌ MISTRAL_API_KEY manquante.")
     st.stop()
 
-# Initialisation du client Mistral (Version 2026)
 client = Mistral(api_key=st.secrets["MISTRAL_API_KEY"])
 MODEL = "mistral-small-latest"
 
-# --- 2. BARRE LATÉRALE (LECTURE PDF) ---
-with st.sidebar:
-    st.header("📁 Documents")
-    uploaded_file = st.file_uploader("Uploader un PDF", type="pdf")
-    
-    if uploaded_file:
-        with st.spinner("Lecture du contenu..."):
-            try:
-                reader = PdfReader(uploaded_file)
-                text = ""
-                for page in reader.pages:
-                    content = page.extract_text()
-                    if content:
-                        text += content + "\n"
-                st.session_state['document_text'] = text
-                st.success("✅ Cours chargé avec succès !")
-            except Exception as e:
-                st.error(f"Erreur lors de la lecture : {e}")
+# --- 2. CHARGEMENT AUTOMATIQUE DU COURS ---
+# On définit le nom du fichier qui doit être sur ton GitHub
+PDF_PERMANENT = "candidater.pdf"
 
-# --- 3. GESTION DU CHAT ---
+@st.cache_resource
+def charger_cours_permanent(file_path):
+    if os.path.exists(file_path):
+        try:
+            reader = PdfReader(file_path)
+            text = ""
+            for page in reader.pages:
+                content = page.extract_text()
+                if content:
+                    text += content + "\n"
+            return text
+        except Exception as e:
+            return f"Erreur de lecture : {e}"
+    return None
+
+# On charge le texte une seule fois pour tout le monde
+texte_universite = charger_cours_permanent(PDF_PERMANENT)
+
+# --- 3. INTERFACE ---
+if texte_universite:
+    st.success(f"📚 Base de connaissances chargée : {PDF_PERMANENT}")
+else:
+    st.warning("⚠️ Aucun fichier de cours permanent trouvé. Utilisez la barre latérale pour tester.")
+
+with st.sidebar:
+    st.header("⚙️ Administration")
+    # On laisse l'option d'uploader un autre PDF pour les tests
+    uploaded_file = st.file_uploader("Mettre à jour le document (optionnel)", type="pdf")
+    if uploaded_file:
+        reader = PdfReader(uploaded_file)
+        text_upload = ""
+        for page in reader.pages:
+            text_upload += page.extract_text() + "\n"
+        st.session_state['document_text'] = text_upload
+        st.info("Document temporaire chargé pour cette session.")
+
+# --- 4. CHAT ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Affichage de l'historique
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Zone de saisie
 if prompt := st.chat_input("Pose ta question sur le cours..."):
-    # Ajouter le message utilisateur
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Réponse de l'IA
     with st.chat_message("assistant"):
-        if 'document_text' not in st.session_state:
-            st.warning("⚠️ Veuillez d'abord uploader un PDF dans la barre latérale.")
+        # Priorité au texte uploadé, sinon texte permanent
+        context_final = st.session_state.get('document_text', texte_universite)
+        
+        if not context_final:
+            st.error("Désolé, je n'ai aucune donnée pour répondre.")
         else:
             try:
-                with st.spinner("Mistral analyse le document..."):
-                    # On prépare le contexte (limité à ~15 000 mots pour la rapidité)
-                    contexte = st.session_state['document_text'][:50000]
+                with st.spinner("Analyse en cours..."):
+                    contexte_limite = context_final[:50000]
+                    full_prompt = f"Utilise ce cours pour répondre : {contexte_limite}\n\nQuestion : {prompt}"
                     
-                    full_prompt = f"""Tu es un assistant pédagogique. Utilise le texte du cours ci-dessous pour répondre à la question.
-                    
-                    TEXTE DU COURS :
-                    {contexte}
-                    
-                    QUESTION DE L'ÉTUDIANT :
-                    {prompt}"""
-                    
-                    # Appel à l'API Mistral (Nouvelle syntaxe)
                     chat_response = client.chat.complete(
                         model=MODEL,
                         messages=[{"role": "user", "content": full_prompt}]
@@ -78,4 +88,4 @@ if prompt := st.chat_input("Pose ta question sur le cours..."):
                     st.markdown(response_text)
                     st.session_state.messages.append({"role": "assistant", "content": response_text})
             except Exception as e:
-                st.error(f"❌ Erreur Mistral : {str(e)}")
+                st.error(f"Erreur : {str(e)}")
