@@ -16,7 +16,7 @@ MODEL = "mistral-small-latest"
 
 # --- 2. CHARGEMENT AUTOMATIQUE DU COURS ---
 # On définit le nom du fichier qui doit être sur ton GitHub
-PDF_PERMANENT = "candidater.pdf"
+PDF_PERMANENT = "Candidater.pdf"
 
 @st.cache_resource
 def charger_cours_permanent(file_path):
