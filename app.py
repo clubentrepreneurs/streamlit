@@ -1,61 +1,81 @@
 import streamlit as st
-from mistralai.client import MistralClient
-from mistralai.models.chat_completion import ChatMessage
+from mistralai import Mistral
 from pypdf import PdfReader
 
-# 1. CONFIGURATION
-st.set_page_config(page_title="Assistant Mistral AI", layout="wide")
-st.title("🎓 Assistant de Cours (Propulsé par Mistral)")
+# --- 1. CONFIGURATION ---
+st.set_page_config(page_title="Assistant Mistral 2026", layout="wide")
+st.title("🎓 Assistant de Cours (Mistral AI)")
 
+# Vérification de la clé API
 if "MISTRAL_API_KEY" not in st.secrets:
-    st.error("❌ Ajoute MISTRAL_API_KEY dans tes Secrets Streamlit.")
+    st.error("❌ Erreur : MISTRAL_API_KEY est introuvable dans les Secrets Streamlit.")
     st.stop()
 
-client = MistralClient(api_key=st.secrets["MISTRAL_API_KEY"])
-MODEL = "mistral-small-latest" # Modèle rapide et efficace
+# Initialisation du client Mistral (Version 2026)
+client = Mistral(api_key=st.secrets["MISTRAL_API_KEY"])
+MODEL = "mistral-small-latest"
 
-# 2. LECTURE DU PDF
+# --- 2. BARRE LATÉRALE (LECTURE PDF) ---
 with st.sidebar:
     st.header("📁 Documents")
     uploaded_file = st.file_uploader("Uploader un PDF", type="pdf")
     
     if uploaded_file:
-        reader = PdfReader(uploaded_file)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-        st.session_state['document_text'] = text
-        st.success("✅ Cours chargé !")
+        with st.spinner("Lecture du contenu..."):
+            try:
+                reader = PdfReader(uploaded_file)
+                text = ""
+                for page in reader.pages:
+                    content = page.extract_text()
+                    if content:
+                        text += content + "\n"
+                st.session_state['document_text'] = text
+                st.success("✅ Cours chargé avec succès !")
+            except Exception as e:
+                st.error(f"Erreur lors de la lecture : {e}")
 
-# 3. CHAT
+# --- 3. GESTION DU CHAT ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Affichage de l'historique
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Pose ta question..."):
+# Zone de saisie
+if prompt := st.chat_input("Pose ta question sur le cours..."):
+    # Ajouter le message utilisateur
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Réponse de l'IA
     with st.chat_message("assistant"):
         if 'document_text' not in st.session_state:
-            st.warning("Uploade un PDF d'abord.")
+            st.warning("⚠️ Veuillez d'abord uploader un PDF dans la barre latérale.")
         else:
             try:
-                # On prépare le contexte
-                context = st.session_state['document_text'][:20000]
-                full_content = f"Utilise ce cours pour répondre : {context}\n\nQuestion : {prompt}"
-                
-                messages = [ChatMessage(role="user", content=full_content)]
-                
-                # Appel à Mistral
-                chat_response = client.chat(model=MODEL, messages=messages)
-                
-                response_text = chat_response.choices[0].message.content
-                st.markdown(response_text)
-                st.session_state.messages.append({"role": "assistant", "content": response_text})
+                with st.spinner("Mistral analyse le document..."):
+                    # On prépare le contexte (limité à ~15 000 mots pour la rapidité)
+                    contexte = st.session_state['document_text'][:50000]
+                    
+                    full_prompt = f"""Tu es un assistant pédagogique. Utilise le texte du cours ci-dessous pour répondre à la question.
+                    
+                    TEXTE DU COURS :
+                    {contexte}
+                    
+                    QUESTION DE L'ÉTUDIANT :
+                    {prompt}"""
+                    
+                    # Appel à l'API Mistral (Nouvelle syntaxe)
+                    chat_response = client.chat.complete(
+                        model=MODEL,
+                        messages=[{"role": "user", "content": full_prompt}]
+                    )
+                    
+                    response_text = chat_response.choices[0].message.content
+                    st.markdown(response_text)
+                    st.session_state.messages.append({"role": "assistant", "content": response_text})
             except Exception as e:
-                st.error(f"Erreur Mistral : {str(e)}")
+                st.error(f"❌ Erreur Mistral : {str(e)}")
