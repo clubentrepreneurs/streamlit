@@ -7,28 +7,29 @@ import os
 st.set_page_config(page_title="Assistant Étudiant Ultra-Stable", layout="wide")
 
 try:
-    GEMINI_KEY = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=GEMINI_KEY)
-except:
-    st.error("⚠️ Clé API non trouvée dans les Secrets Streamlit.")
+    if "GEMINI_API_KEY" in st.secrets:
+        GEMINI_KEY = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=GEMINI_KEY)
+    else:
+        st.error("⚠️ Clé API non trouvée dans les Secrets Streamlit (GEMINI_API_KEY).")
+        st.stop()
+except Exception as e:
+    st.error(f"Erreur de configuration : {e}")
     st.stop()
 
-# --- 2. INITIALISATION DU MODÈLE (TEST DE PLUSIEURS NOMS) ---
-# On essaie de trouver un modèle disponible sur ton compte
+# --- 2. INITIALISATION DU MODÈLE ---
 @st.cache_resource
 def load_stable_model():
-    # Liste des noms possibles par ordre de préférence
     model_names = [
         'models/gemini-1.5-flash', 
         'gemini-1.5-flash', 
         'models/gemini-pro',
         'gemini-pro'
     ]
-    
     for name in model_names:
         try:
             m = genai.GenerativeModel(name)
-            # Test rapide pour voir si le modèle répond
+            # Test de connexion ultra-rapide
             m.generate_content("test", generation_config={"max_output_tokens": 1})
             return m
         except:
@@ -38,7 +39,7 @@ def load_stable_model():
 model = load_stable_model()
 
 if model is None:
-    st.error("❌ Aucun modèle Gemini n'a pu être contacté. Vérifie ta clé API ou les restrictions de ton pays.")
+    st.error("❌ Impossible de contacter Gemini. Vérifie ta clé API ou ta connexion.")
     st.stop()
 
 # --- 3. INTERFACE ---
@@ -50,74 +51,52 @@ with st.sidebar:
     
     if uploaded_file:
         with st.spinner("Lecture du PDF..."):
-            reader = PdfReader(uploaded_file)
-            text_content = ""
-            for page in reader.pages:
-                text_content += page.extract_text()
-            st.session_state['cours_texte'] = text_content
-            st.success("Cours chargé avec succès !")
+            try:
+                reader = PdfReader(uploaded_file)
+                text_content = ""
+                for page in reader.pages:
+                    text_content += page.extract_text()
+                st.session_state['cours_texte'] = text_content
+                st.success("Cours chargé avec succès !")
+            except Exception as e:
+                st.error(f"Erreur lors de la lecture du PDF : {e}")
 
-# --- 4. CHAT ---
+# --- 4. GESTION DU CHAT ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-if prompt := st.chat_input("Pose ta question..."):
-    if 'cours_texte' not in st.session_state:
-        st.warning("Veuillez d'abord ajouter un PDF.")
-    else:
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        with st.chat_message("assistant"):
-            try:
-                # On limite le texte pour ne pas saturer l'API (env. 15-20 pages)
-                contexte = st.session_state['cours_texte'][:50000]
-                
-                instruction = f"""Tu es un tuteur académique. Utilise le texte suivant pour répondre à la question. 
-                Si la réponse n'est pas dedans, utilise tes connaissances générales en le précisant.
-                
-                TEXTE DU COURS :
-                {contexte}
-                
-                QUESTION :
-                {prompt}"""
-                
-                response = model.generate_content(instruction)
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
-            except Exception as e:
-                st.error(f"Désolé, une erreur est survenue : {e}")    st.session_state.messages = []
-
-# Affichage de l'historique
+# Affichage des messages précédents
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 # Zone de saisie
 if prompt := st.chat_input("Pose ta question sur le cours..."):
-    if 'cours_texte' not in st.session_state:
-        st.warning("Veuillez d'abord uploader un PDF dans la barre latérale.")
-    else:
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+    # On ajoute la question de l'utilisateur
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-        with st.chat_message("assistant"):
-            # On envoie le texte du cours DIRECTEMENT dans le contexte
-            # Gemini 1.5 Flash accepte jusqu'à 1 million de mots, donc ça passe largement !
-            prompt_complet = f"""Tu es un assistant prof. Utilise le texte du cours suivant pour répondre.
-            
-            TEXTE DU COURS :
-            {st.session_state['cours_texte'][:30000]} 
-            
-            QUESTION DE L'ÉTUDIANT :
-            {prompt}"""
-            
-            response = model.generate_content(prompt_complet)
-            st.markdown(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
+    # Réponse de l'IA
+    with st.chat_message("assistant"):
+        if 'cours_texte' not in st.session_state:
+            st.warning("Veuillez d'abord uploader un PDF dans la barre latérale.")
+        else:
+            try:
+                with st.spinner("L'IA réfléchit..."):
+                    # On limite le contexte pour rester dans les clous de l'API
+                    contexte = st.session_state['cours_texte'][:40000]
+                    
+                    instruction = f"""Tu es un tuteur académique. Utilise le texte du cours pour répondre.
+                    
+                    TEXTE DU COURS :
+                    {contexte}
+                    
+                    QUESTION :
+                    {prompt}"""
+                    
+                    response = model.generate_content(instruction)
+                    st.markdown(response.text)
+                    st.session_state.messages.append({"role": "assistant", "content": response.text})
+            except Exception as e:
+                st.error(f"Désolé, une erreur est survenue lors de la génération : {e}")
