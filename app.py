@@ -15,7 +15,7 @@ if "GEMINI_API_KEY" not in st.secrets:
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 # On force le modèle le plus commun
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-pro')
 
 # 3. GESTION DU DOCUMENT (BARRE LATÉRALE)
 with st.sidebar:
