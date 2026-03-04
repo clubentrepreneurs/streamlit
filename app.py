@@ -5,7 +5,7 @@ import os
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Assistant Université 2026", layout="wide")
-st.title("🎓 Assistant Officiel des Étudiants")
+st.title("🎓 Bot des Étudiants")
 
 if "MISTRAL_API_KEY" not in st.secrets:
     st.error("❌ MISTRAL_API_KEY manquante.")
