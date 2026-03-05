@@ -6,15 +6,22 @@ import os
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Assistant Université 2026", layout="wide", page_icon="🎓")
 
-# --- STYLE CSS AJUSTÉ (Cible uniquement les éléments Streamlit, pas ton titre) ---
+# --- STYLE CSS ULTIME ---
 hide_style = """
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stDeployButton {display:none;}
-    [data-testid="stDecoration"] {display:none;} /* Enlève la ligne colorée en haut */
-    [data-testid="stHeader"] {background: rgba(0,0,0,0); pointer-events: none;} /* Rend le header invisible mais garde l'espace */
-    [data-testid="stToolbar"] {visibility: hidden;}
+    [data-testid="stDecoration"] {display:none;}
+    [data-testid="stHeader"] {background: rgba(0,0,0,0); pointer-events: none;}
+    
+    /* Tentative pour masquer les badges Streamlit en bas à droite */
+    .viewerBadge_container__1QSob {display:none !important;}
+    .stAppViewBlockContainer {padding-bottom: 0px;}
+    footer {display:none !important;}
+    
+    /* Cacher le bouton de déploiement et autres overlays */
+    #streamlitApp {bottom: 0px !important;}
     </style>
     """
 st.markdown(hide_style, unsafe_allow_html=True)
