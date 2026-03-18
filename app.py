@@ -6,17 +6,29 @@ import os
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Assistant Université 2026", layout="wide", page_icon="🎓")
 
-# (Gardez votre bloc CSS hide_style ici...)
+# --- STYLE CSS ---
+hide_style = """
+    <style>
+    header {visibility: hidden !important;}
+    [data-testid="stHeader"] {display: none !important;}
+    footer {visibility: hidden !important;}
+    .stDeployButton {display:none;}
+    </style>
+    """
+st.markdown(hide_style, unsafe_allow_html=True)
+
+st.markdown("<h1 style='text-align: center;'>🎓 Assistant Officiel</h1>", unsafe_allow_html=True)
+st.write("---")
 
 # --- SÉCURITÉ API ---
 if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("❌ GOOGLE_API_KEY manquante dans les Secrets.")
+    st.error("❌ GOOGLE_API_KEY manquante dans les Secrets Streamlit.")
     st.stop()
 
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# --- 2. CHARGEMENT DU PDF (Inchangé) ---
+# --- 2. CHARGEMENT DU PDF ---
 PDF_PERMANENT = "Candidater.pdf"
 
 @st.cache_resource
@@ -36,54 +48,14 @@ def charger_donnees(file_path):
 
 texte_universite, pages_totales = charger_donnees(PDF_PERMANENT)
 
-# --- 3. CHAT ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-if prompt := st.chat_input("Posez votre question à l'assistant Gemini..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    with st.chat_message("assistant"):
-        if not texte_universite:
-            st.error("Document source manquant.")
-        else:
-            try:
-                with st.spinner("Gemini analyse le document..."):
-                    # On limite le texte pour ne pas dépasser les limites (bien que Gemini ait une large fenêtre)
-                    contexte = texte_universite[:100000] 
-                    
-                    full_prompt = f"""Tu es l'assistant officiel de l'université. 
-                    Utilise les informations suivantes pour répondre :
-                    
-                    CONTEXTE : {contexte}
-                    
-                    QUESTION : {prompt}"""
-                    
-                    response = model.generate_content(full_prompt)
-                    
-                    st.markdown(response.text)
-                    st.session_state.messages.append({"role": "assistant", "content": response.text})
-            except Exception as e:
-                st.error(f"Erreur Gemini : {e}")    if texte_universite:
-        st.success(f"**Fichier :** {PDF_PERMANENT}")
-        st.info(f"📄 **{pages_totales} pages** analysées.")
-        st.write("---")
+# --- 3. BARRE LATÉRALE ---
+with st.sidebar:
+    st.title("📂 Source")
+    if texte_universite:
+        st.success(f"Document : {PDF_PERMANENT}")
+        st.info(f"📄 {pages_totales} pages analysées.")
     else:
-        st.error("❌ Fichier source absent sur GitHub.")
-
-    st.header("⚙️ Réglages IA")
-    temp = st.slider("Précision / Créativité", 0.0, 1.0, 0.2)
-    max_t = st.number_input("Longueur max réponse", 100, 2000, 600)
-    
-    if st.button("🗑️ Nouvelle conversation"):
-        st.session_state.messages = []
-        st.rerun()
+        st.error("❌ Fichier PDF non trouvé sur GitHub.")
 
 # --- 4. CHAT ---
 if "messages" not in st.session_state:
@@ -100,18 +72,17 @@ if prompt := st.chat_input("Posez votre question..."):
 
     with st.chat_message("assistant"):
         if not texte_universite:
-            st.error("Document source manquant.")
+            st.error("Impossible de répondre : document source absent.")
         else:
             try:
-                with st.spinner("Analyse en cours..."):
-                    # Préparation du prompt pour Gemini
-                    contexte = texte_universite[:100000]
-                    full_prompt = f"Contexte: {contexte}\n\nQuestion: {prompt}"
+                with st.spinner("Recherche dans le document..."):
+                    # On envoie les 50 000 premiers caractères pour rester prudent
+                    contexte = texte_universite[:50000]
+                    instruction = f"Tu es l'assistant de l'université. Réponds en utilisant ce contexte :\n\n{contexte}\n\nQuestion : {prompt}"
                     
-                    response = model.generate_content(full_prompt)
+                    response = model.generate_content(instruction)
                     
-                    response_text = response.text
-                    st.markdown(response_text)
-                    st.session_state.messages.append({"role": "assistant", "content": response_text})
+                    st.markdown(response.text)
+                    st.session_state.messages.append({"role": "assistant", "content": response.text})
             except Exception as e:
-                st.error(f"Erreur Gemini : {e}")
+                st.error(f"Erreur : {e}")
