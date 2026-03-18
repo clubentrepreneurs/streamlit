@@ -26,7 +26,7 @@ if "GOOGLE_API_KEY" not in st.secrets:
     st.stop()
 
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel(model_name="gemini-1.5-flash-latest")
 
 # --- 2. CHARGEMENT DU PDF ---
 PDF_PERMANENT = "Candidater.pdf"
