@@ -103,22 +103,15 @@ if prompt := st.chat_input("Posez votre question..."):
             st.error("Document source manquant.")
         else:
             try:
-                with st.spinner("Analyse du document..."):
-                    contexte = texte_universite[:45000]
-                    system_prompt = "Tu es l'assistant de l'université. Réponds de manière claire et polie."
+                with st.spinner("Analyse en cours..."):
+                    # Préparation du prompt pour Gemini
+                    contexte = texte_universite[:100000]
+                    full_prompt = f"Contexte: {contexte}\n\nQuestion: {prompt}"
                     
-                    response = client.chat.complete(
-                        model=MODEL,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": f"Contexte: {contexte}\n\nQuestion: {prompt}"}
-                        ],
-                        temperature=temp,
-                        max_tokens=max_t
-                    )
+                    response = model.generate_content(full_prompt)
                     
-                    response_text = response.choices[0].message.content
+                    response_text = response.text
                     st.markdown(response_text)
                     st.session_state.messages.append({"role": "assistant", "content": response_text})
             except Exception as e:
-                st.error(f"Erreur API : {e}")
+                st.error(f"Erreur Gemini : {e}")
