@@ -15,25 +15,21 @@ genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
 # --- SOLUTION AU 404 : Tester les modèles disponibles ---
 @st.cache_resource
-@st.cache_resource
 def get_model():
-    errors = []
-    for m in ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']:
-        try:
-            model = genai.GenerativeModel(m)
-            model.generate_content("test")
-            return model
-        except Exception as e:
-            errors.append(f"{m}: {str(e)}")
-            continue
-    
-    # Si on arrive ici, on affiche la vraie erreur technique
-    if errors:
-        st.warning("Détails techniques des échecs :")
-        for err in errors:
-            st.write(err)
-    return None
-model = get_model()
+    try:
+        # On force la configuration sur la version stable
+        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+        
+        # On spécifie le modèle avec son nom complet pour éviter le 404
+        # 'models/gemini-1.5-flash' est l'identifiant standard en 2026
+        model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
+        
+        # Test de sécurité
+        model.generate_content("ping")
+        return model
+    except Exception as e:
+        st.error(f"Échec critique du modèle : {e}")
+        return None
 
 # --- CHARGEMENT PDF ---
 @st.cache_resource
