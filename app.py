@@ -3,38 +3,62 @@ import google.generativeai as genai
 from pypdf import PdfReader
 import os
 
-# --- 1. CONFIGURATION DE LA PAGE ---
-st.set_page_config(page_title="Assistant Université 2026", layout="wide", page_icon="🎓")
+# 1. CONFIGURATION
+st.set_page_config(page_title="Assistant Université 2026", layout="wide")
 
-# --- STYLE CSS (Interface épurée) ---
-st.markdown("""
-    <style>
-    header {visibility: hidden !important;}
-    footer {visibility: hidden !important;}
-    [data-testid="stHeader"] {display: none !important;}
-    .block-container {padding-top: 2rem;}
-    </style>
-    """, unsafe_allow_html=True)
+# Masquage du header
+st.markdown("<style>header {visibility: hidden;} footer {visibility: hidden;}</style>", unsafe_allow_html=True)
+st.title("🎓 Assistant Officiel")
 
-st.markdown("<h1 style='text-align: center;'>🎓 Assistant Officiel des Étudiants</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: gray;'>Session 2026 - Guide des Candidatures</p>", unsafe_allow_html=True)
-st.write("---")
-
-# --- SÉCURITÉ API ---
+# 2. SÉCURITÉ & MODÈLE
 if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("❌ Configuration incomplète : GOOGLE_API_KEY manquante dans les Secrets.")
+    st.error("Clé API manquante dans les Secrets.")
     st.stop()
 
-# Initialisation du modèle Gemini
-try:
-    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-    # Utilisation du nom de modèle le plus compatible en 2026
-    model = genai.GenerativeModel('gemini-1.5-flash')
-except Exception as e:
-    st.error(f"Erreur d'initialisation Google AI : {e}")
-    st.stop()
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-# --- 2. CHARGEMENT DU PDF ---
+# 3. CHARGEMENT DU PDF
+PDF_NAME = "Candidater.pdf"
+
+@st.cache_resource
+def load_pdf(path):
+    if not os.path.exists(path):
+        return None
+    try:
+        reader = PdfReader(path)
+        return "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
+    except:
+        return None
+
+document_text = load_pdf(PDF_NAME)
+
+# 4. CHAT INTERFACE
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+for m in st.session_state.messages:
+    with st.chat_message(m["role"]):
+        st.markdown(m["content"])
+
+if prompt := st.chat_input("Votre question..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant"):
+        if not document_text:
+            st.error("Erreur : Le fichier PDF est introuvable ou illisible.")
+        else:
+            try:
+                with st.spinner("Analyse..."):
+                    context = document_text[:60000]
+                    full_prompt = f"Tu es l'assistant université. Réponds en utilisant ce texte :\n\n{context}\n\nQuestion : {prompt}"
+                    response = model.generate_content(full_prompt)
+                    st.markdown(response.text)
+                    st.session_state.messages.append({"role": "assistant", "content": response.text})
+            except Exception as e:
+                st.error(f"Erreur technique : {str(e)}")# --- 2. CHARGEMENT DU PDF ---
 PDF_PERMANENT = "Candidater.pdf"
 
 @st.cache_resource
